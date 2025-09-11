@@ -16,10 +16,21 @@ fun Route.authRoutes(
 ) {
     route("/auth") {
 
+
+        // REQUEST OTP before signup
+        post("/request-otp") {
+            val request = call.receive<SignUpRequest>()
+            when (val result = authRepository.requestTestOtp(request)) {
+                is AuthResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                is AuthResult.Error -> call.respond(result.status, mapOf("error" to result.message))
+            }
+        }
+
+
         // SIGN UP
         post("/signup") {
             val request = call.receive<SignUpRequest>()
-            when (val result = authRepository.signupUser(request)) {
+            when (val result = authRepository.signUpUser(request)) {
                 is AuthResult.Success -> call.respond(HttpStatusCode.Created, result.data)
                 is AuthResult.Error -> call.respond(result.status, mapOf("error" to result.message))
             }

@@ -1,11 +1,15 @@
 package com.example
 
 import com.example.data.repository.AuthRepositoryImpl
+import com.example.data.repository.OtpRepositoryImpl
 import com.example.data.repository.RefreshTokenRepositoryImpl
 import com.example.data.repository.UserRepositoryImpl
+import com.example.domain.repository.OtpRepository
 import com.example.security.hashing.BcryptHasher
 import com.example.security.token.JwtConfig
 import com.example.security.token.JwtTokenService
+import com.example.services.OtpService
+import com.example.utils.Constants.OTP_API_KEY
 import io.ktor.server.application.*
 import kotlinx.coroutines.launch
 import org.litote.kmongo.coroutine.coroutine
@@ -39,9 +43,12 @@ fun Application.module() {
     val tokenService = JwtTokenService(jwtConfig)
     val passwordHasher = BcryptHasher()
 
+    val otpService = OtpService(OTP_API_KEY)
+
     // REPOSITORIES
     // ✅ Repositories
     val userRepository = UserRepositoryImpl(db)
+    val otpRepository = OtpRepositoryImpl(db, otpService)
 
 
     // ✅ Ensure indexes at startup
@@ -53,11 +60,12 @@ fun Application.module() {
 
     // ✅ Auth repository depends on User + RefreshToken repo
     val authRepository = AuthRepositoryImpl(
-        userRepository,
-        refreshTokenRepository,
-        passwordHasher,
-        tokenService,
-        jwtConfig
+        userRepository = userRepository,
+        otpRepository = otpRepository,
+        refreshTokens = refreshTokenRepository,
+        tokenService = tokenService,
+        hasher = passwordHasher,
+        jwtConfig = jwtConfig
     )
 
 
