@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class NearbyCandidateDto(
-    val userId: String,
+    val walker: WalkerPublicDto,
     val lng: Double,
     val lat: Double,
     val distanceMeters: Double? = null,

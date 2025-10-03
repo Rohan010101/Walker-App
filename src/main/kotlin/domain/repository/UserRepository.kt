@@ -11,7 +11,10 @@ interface UserRepository {
     suspend fun getUserByUsername(username: String): User?
     suspend fun getUserByEmail(email: String): User?
     suspend fun getUserByPhone(phone: String): User?
+
     suspend fun getUserByUserId(userId: String): User?
+    suspend fun getUserByWalkerId(walkerId: String): User?
+    suspend fun getUserByWandererId(wandererId: String): User?
 
     suspend fun updateUserProfile(userId: String,updatedUser: UpdateUserDto): Boolean
     suspend fun updateProfilePic(userId: String, key: String): Boolean

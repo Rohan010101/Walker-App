@@ -30,6 +30,10 @@ class WandererRepositoryImpl(
         return wanderers.findOne(Wanderer::userId eq ObjectId(userId))
     }
 
+    override suspend fun findByWandererId(wandererId: String): Wanderer? {
+        return wanderers.findOne(Wanderer::id eq ObjectId(wandererId))
+    }
+
     override suspend fun update(profile: UpdateWandererProfileDto): Boolean {
         val result = wanderers.updateOne(
             filter = Wanderer::id eq ObjectId(profile.wandererId),

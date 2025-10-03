@@ -158,6 +158,18 @@ fun Walker.toDto(): WalkerDto =
     )
 
 
+//fun Walker.toPublicDto(): WalkerPublicDto {
+//    return WalkerPublicDto(
+//        walkerId = this.id.toHexString(),
+//        bio = this.bio,
+//        rating = this.rating,
+//        completedWalks = this.completedWalks,
+//        languages = this.languages,
+//        specialties = this.specialties,
+//        serviceRadiusKm = this.serviceRadiusKm
+//    )
+//}
+
 
 
 

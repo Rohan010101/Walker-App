@@ -6,5 +6,6 @@ import com.example.domain.model.Walker
 interface WalkerRepository {
     suspend fun create(profile: Walker): Walker?
     suspend fun findByUserId(userId: String): Walker?
+    suspend fun findByWalkerId(walkerId: String): Walker?
     suspend fun update(profile: UpdateWalkerProfileDto): Boolean
 }

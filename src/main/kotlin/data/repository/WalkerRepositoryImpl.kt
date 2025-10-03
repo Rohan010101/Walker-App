@@ -30,6 +30,10 @@ class WalkerRepositoryImpl(
         return walkers.findOne(Walker::userId eq ObjectId(userId))
     }
 
+    override suspend fun findByWalkerId(walkerId: String): Walker? {
+        return walkers.findOne(Walker::id eq ObjectId(walkerId))
+    }
+
     override suspend fun update(profile: UpdateWalkerProfileDto): Boolean {
         val result = walkers.updateOne(
             filter = Walker::id eq ObjectId(profile.walkerId),

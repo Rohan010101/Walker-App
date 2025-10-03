@@ -2,6 +2,8 @@ package com.example.data.repository
 
 import com.example.data.model.UpdateUserDto
 import com.example.domain.model.User
+import com.example.domain.model.Walker
+import com.example.domain.model.Wanderer
 import com.example.domain.repository.UserRepository
 import com.example.logger
 import org.bson.types.ObjectId
@@ -15,7 +17,8 @@ class UserRepositoryImpl(
 ): UserRepository {
 
     private val users = db.getCollection<User>()
-
+    private val walkers = db.getCollection<Walker>()
+    private val wanderers = db.getCollection<Wanderer>()
 
     override suspend fun ensureIndexes() {
         users.ensureUniqueIndex(User::email)
@@ -60,6 +63,19 @@ class UserRepositoryImpl(
     override suspend fun getUserByUserId(userId: String): User? {
         val user = users.findOneById(userId)
         return user
+    }
+
+
+    override suspend fun getUserByWalkerId(walkerId: String): User? {
+        val walker = walkers.findOne(Walker::id eq ObjectId(walkerId))
+        val userId = walker!!.userId.toHexString()          // TODO: Substitute !! with something better
+        return getUserByUserId(userId)      // TODO: Check if user exists
+    }
+
+    override suspend fun getUserByWandererId(wandererId: String): User? {
+        val wanderer = wanderers.findOne(Wanderer::id eq ObjectId(wandererId))
+        val userId = wanderer!!.userId.toHexString()        // TODO: Substitute !! with something better
+        return getUserByUserId(userId)      // TODO: Check if user exists
     }
 
     override suspend fun updateUserProfile(userId: String, updatedUser: UpdateUserDto): Boolean {

@@ -31,7 +31,7 @@ fun Application.module() {
     val mongoPw = System.getenv("MONGO_PW")
     val dbName = "Walker-App"
     val db = KMongo.createClient(
-        connectionString = "mongodb+srv://rohansinghrawat05:$mongoPw@cluster0.zdqfp8f.mongodb.net/$dbName?retryWrites=true&w=majority&appName=Cluster0"
+        connectionString = "mongodb+srv://imgurujeet:$mongoPw@cluster0.zdqfp8f.mongodb.net/$dbName?retryWrites=true&w=majority&appName=Cluster0"
     ).coroutine
         .getDatabase(dbName)
     logger().info("Database Connected")
@@ -64,7 +64,7 @@ fun Application.module() {
 
 
     val routingService = RoutingService(httpClient)
-    val matchingService = MatchingService(availabilityRepository, routingService)
+    val matchingService = MatchingService(availabilityRepository, walkerRepository, wandererRepository, routingService)
 
     val walkerService = WalkerService(walkerRepository)
     val wandererService = WandererService(wandererRepository)

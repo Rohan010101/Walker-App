@@ -59,6 +59,6 @@ fun Application.configureRouting(
         authRoutes(authRepository)
         userRoutes(s3, client, userRepository)
         profileRoutes(walkerService, wandererService, familyService)
-        geoRoutes(walkerRepository, availabilityRepository, matchingService)
+        geoRoutes(userRepository, walkerRepository, availabilityRepository, matchingService)
     }
 }
