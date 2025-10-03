@@ -3,6 +3,7 @@ package com.example.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class LoginRequest(
-    val phone: String
+data class Location(
+    val lat: Double,
+    val lng: Double
 )

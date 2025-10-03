@@ -1,17 +1,19 @@
 package com.example
 
-import com.example.data.repository.AuthRepositoryImpl
-import com.example.data.repository.OtpRepositoryImpl
-import com.example.data.repository.RefreshTokenRepositoryImpl
-import com.example.data.repository.UserRepositoryImpl
-import com.example.domain.repository.OtpRepository
+import aws.sdk.kotlin.services.s3.S3Client
+import com.example.data.repository.*
 import com.example.security.hashing.BcryptHasher
 import com.example.security.token.JwtConfig
 import com.example.security.token.JwtTokenService
-import com.example.services.OtpService
-import com.example.utils.Constants.OTP_API_KEY
+import com.example.services.*
+import com.example.utils.Constants.ACCOUNT_SID
+import com.example.utils.Constants.AUTH_TOKEN
+import com.example.utils.Constants.SERVICE_SID
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import io.ktor.server.application.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.litote.kmongo.coroutine.coroutine
 import org.litote.kmongo.reactivestreams.KMongo
 
@@ -20,6 +22,11 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+
+    val httpClient = HttpClient(CIO) { /* configure once */ }
+    val s3Client = runBlocking {
+        S3Client.fromEnvironment { }        // ✅ shared instance
+    }
 
     val mongoPw = System.getenv("MONGO_PW")
     val dbName = "Walker-App"
@@ -43,17 +50,30 @@ fun Application.module() {
     val tokenService = JwtTokenService(jwtConfig)
     val passwordHasher = BcryptHasher()
 
-    val otpService = OtpService(OTP_API_KEY)
+    val otpService = OtpService(ACCOUNT_SID,AUTH_TOKEN, SERVICE_SID)
 
     // REPOSITORIES
     // ✅ Repositories
     val userRepository = UserRepositoryImpl(db)
     val otpRepository = OtpRepositoryImpl(db, otpService)
+    val availabilityRepository = AvailabilityRepositoryImpl(db)
 
+    val walkerRepository = WalkerRepositoryImpl(db)
+    val wandererRepository = WandererRepositoryImpl(db)
+    val familyRepository = FamilyRepositoryImpl(db)
+
+
+    val routingService = RoutingService(httpClient)
+    val matchingService = MatchingService(availabilityRepository, routingService)
+
+    val walkerService = WalkerService(walkerRepository)
+    val wandererService = WandererService(wandererRepository)
+    val familyService = FamilyService(familyRepository, wandererRepository)
 
     // ✅ Ensure indexes at startup
     launch {
         userRepository.ensureIndexes()
+        availabilityRepository.ensureIndexes()
     }
     val refreshTokenRepository = RefreshTokenRepositoryImpl(db)
 
@@ -74,5 +94,5 @@ fun Application.module() {
     configureSerialization()
     configureSecurity(jwtConfig)
     configureSockets()
-    configureRouting(authRepository, userRepository)
+    configureRouting(authRepository, userRepository, walkerRepository, availabilityRepository, matchingService, walkerService, wandererService, familyService, s3Client, httpClient)
 }

@@ -1,116 +1,62 @@
 package com.example.services
 
 import com.example.logger
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
+import com.twilio.Twilio
+import com.twilio.rest.api.v2010.account.Message
+import com.twilio.rest.verify.v2.service.Verification
+import com.twilio.rest.verify.v2.service.VerificationCheck
+import com.twilio.type.Client
+import com.twilio.type.PhoneNumber
 
 
-//class OtpService(
-//    private val accountSid: String,
-//    private val authToken: String,
-//) {
-//    private val client = HttpClient(CIO)
-//
-//    suspend fun sendOtp(target: String, otp: String): String {
-//
-//        logger().info("sendOtp => target: $target")
-//        logger().info("sendOtp => otp: $otp")
-//
-//        val response: HttpResponse = client.post("https://www.fast2sms.com/dev/bulkV2") {
-//            header("authorization", apiKey)
-//            parameter("variables_values", otp)
-//            parameter("route", "otp")
-//            parameter("numbers", target)
-//        }
-//
-//        logger().info("sendOtp => response: $response")
-//        logger().info("sendOtp => bodyAsText: ${response.bodyAsText()}")
-//
-//        return response.bodyAsText()
-//    }
-//
-//
-//    // Alternative method using the standard SMS route
-//    suspend fun sendOtpViaSms(target: String, otp: String): String {
-//        logger().info("sendOtpViaSms => target: $target")
-//        logger().info("sendOtpViaSms => otp: $otp")
-//
-//        val message = "Your OTP is $otp. Valid for 10 minutes. Do not share with anyone."
-//
-//        val response: HttpResponse = client.post("https://www.fast2sms.com/dev/bulkV2") {
-//            header("authorization", apiKey)
-//            parameter("message", message)
-//            parameter("language", "english")
-//            parameter("route", "q")  // Quick SMS route
-//            parameter("numbers", target)
-//        }
-//
-//        logger().info("sendOtpViaSms => response: $response")
-//        logger().info("sendOtpViaSms => bodyAsText: ${response.bodyAsText()}")
-//
-//        return response.bodyAsText()
-//    }
-//
-//}
-
-
-
-    // FAST 2 SMS
 class OtpService (
-    private val apiKey: String
+    private val accountSid: String,
+    private val authToken: String,
+//    private val fromNumber: String,
+    private val verifyServiceSid: String
 ) {
-    private val client = HttpClient(CIO)
+    init {
+        Twilio.init(accountSid, authToken)
+    }
 
-    suspend fun sendOtp(target: String, otp: String): String {
 
-        logger().info("sendOtp => target: $target")
-        logger().info("sendOtp => otp: $otp")
-
-        val response: HttpResponse = client.post("https://www.fast2sms.com/dev/bulkV2") {
-            header("authorization", apiKey)
-            parameter("variables_values", otp)
-            parameter("route", "otp")
-            parameter("numbers", target)
+    /**
+     * Sends an OTP via Twilio Verify (no fromNumber needed).
+     */
+    fun sendOtp(to: String): Boolean {
+        val toPhoneNumber = if (to.startsWith("+")) to else "+91$to" // prepend country code if missing
+        return try {
+            Verification.creator(
+                verifyServiceSid,
+                toPhoneNumber,
+                "sms"
+            ).create()
+            true
+        } catch (e: Exception) {
+            logger().error("Failed to send OTP SMS to $to: ${e.message}", e)
+            false
         }
-
-        logger().info("sendOtp => response: $response")
-        logger().info("sendOtp => bodyAsText: ${response.bodyAsText()}")
-
-        return response.bodyAsText()
     }
 
+    /**
+     * Verifies the OTP with Twilio Verify.
+     */
+    fun verifyOtp(to: String, otp: String): Boolean {
+        val toPhoneNumber = if (to.startsWith("+")) to else "+91$to"
+        return try {
+            val result = VerificationCheck.creator(
+                verifyServiceSid
+            )
+                .setTo(toPhoneNumber)
+                .setCode(otp)
+                .create()
 
-    // Alternative method using the standard SMS route
-    suspend fun sendOtpViaSms(target: String, otp: String): String {
-        logger().info("sendOtpViaSms => target: $target")
-        logger().info("sendOtpViaSms => otp: $otp")
-
-        val message = "Your OTP is $otp. Valid for 10 minutes. Do not share with anyone."
-
-        val response: HttpResponse = client.post("https://www.fast2sms.com/dev/bulkV2") {
-            header("authorization", apiKey)
-            parameter("message", message)
-            parameter("language", "english")
-            parameter("route", "q")  // Quick SMS route
-            parameter("numbers", target)
+            result.status == "approved"
+        } catch (e: Exception) {
+            logger().error("Failed to verify OTP for $to: ${e.message}", e)
+            false
         }
-
-        logger().info("sendOtpViaSms => response: $response")
-        logger().info("sendOtpViaSms => bodyAsText: ${response.bodyAsText()}")
-
-        return response.bodyAsText()
     }
 
-    suspend fun sendTestOtp(target: String, otp: String): String {
 
-        logger().info("sendTestOtp => target: $target")
-        logger().info("sendTestOtp => otp: $otp")
-
-        val message = "Your OTP is $otp. Valid for 10 minutes. Do not share with anyone."
-
-
-        return message
-    }
 }

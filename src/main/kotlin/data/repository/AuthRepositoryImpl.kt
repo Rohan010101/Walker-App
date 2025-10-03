@@ -34,102 +34,84 @@ class AuthRepositoryImpl(
 
 
     // OTP REQUEST
-    override suspend fun requestOtp(request: SignUpRequest): AuthResult<Unit> {
-        val name = request.name.trim()
-        val username = request.username.trim()
+    override suspend fun requestOtp(request: OtpRequest): AuthResult<Map<String, String>> {
         val phone = request.phone.trim()
-        val email = request.email.trim()
-        val password = request.password.trim()
 
-        // username validation
-        if (!username.matches(usernameRegex)) {
-            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid username format")
-        }
         if (!phone.matches(phoneRegex)) {
             return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid phone number")
         }
-        if (email.isNotBlank() && !email.matches(emailRegex)) {
-            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid email format")
-        }
-
-
-
-        // uniqueness checks
-        if (userRepository.isUsernameTaken(username)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Username already taken")
-        }
-        if (userRepository.isPhoneTaken(phone)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Phone already registered")
-        }
-        if (email.isNotBlank() && userRepository.isEmailTaken(email)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Email already registered")
-        }
-
 
         // generate OTP
         val otp = (100000..999999).random().toString()
-        otpRepository.saveOtp(phone, otp, ttlMs = 5 * 60 * 1000) // 5 min expiry
+//        otpRepository.saveOtp(phone, otp, ttlMs = 5 * 60 * 1000) // 5 min expiry
 
         // send OTP via SMS/Email (adapter pattern)
-//        otpRepository.deliverOtp(phone, otp)
-        otpRepository.deliverTestOtp(phone, otp)
+        otpRepository.deliverOtp(phone, otp)
+//        otpRepository.deliverTestOtp(phone, otp)
 
-        return AuthResult.Success(Unit)
-
+        return AuthResult.Success(mapOf("message" to "OTP sent successfully"))
     }
 
 
-    // TEST OTP REQUEST
-    override suspend fun requestTestOtp(request: SignUpRequest): AuthResult<TestOtpResponse> {
-        val name = request.name.trim()
-        val username = request.username.trim()
+    // VERIFY OTP
+    override suspend fun verifyOtp(request: OtpVerificationRequest): AuthResult<OtpVerificationResponse> {
+
         val phone = request.phone.trim()
-        val email = request.email.trim()
-        val password = request.password.trim()
-
-        // username validation
-        if (!username.matches(usernameRegex)) {
-            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid username format")
-        }
-        if (!phone.matches(phoneRegex)) {
-            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid phone number")
-        }
-        if (email.isNotBlank() && !email.matches(emailRegex)) {
-            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid email format")
+        val otp = request.otp.trim()
+        logger().info("1")
+        // verify OTP
+        val result = otpRepository.verifyOtp(phone, otp)
+        if (!result) {
+            logger().warn("Failed OTP verification for phone=$phone")
+            return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid or expired OTP")
         }
 
-
-
-        // uniqueness checks
-        if (userRepository.isUsernameTaken(username)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Username already taken")
-        }
-        if (userRepository.isPhoneTaken(phone)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Phone already registered")
-        }
-        if (email.isNotBlank() && userRepository.isEmailTaken(email)) {
-            return AuthResult.Error(HttpStatusCode.Conflict, "Email already registered")
-        }
-
-
-        // generate OTP
-        val otp = (100000..999999).random().toString()
-        otpRepository.saveOtp(phone, otp, ttlMs = 5 * 60 * 1000) // 5 min expiry
-
-        // send OTP via SMS/Email (adapter pattern)
-//        otpRepository.deliverOtp(phone, otp)
-        val testOtp = otpRepository.deliverTestOtp(phone, otp)
-
-
-        return AuthResult.Success(
-            TestOtpResponse(
-                message = "OTP sent Successfully!!",
-                otp = testOtp
+        logger().info("2")
+        val user = userRepository.getUserByPhone(phone)
+        logger().info("success")
+        if (user == null) {
+            logger().info("3")
+            val response = OtpVerificationResponse(
+                otpVerified = true,
+                userExists = false,
+                existingPhone = null,
+                tokenPair = null
             )
-        )
+            return AuthResult.Success(response)
+        }
+        else {
+            logger().info("4")
+            val familyId = UUID.randomUUID().toString()
+            val jti = UUID.randomUUID().toString()
+            val refresh = tokenService.generateRefreshToken(user.id.toHexString(), jti, familyId)
+            val rtHash = sha256(refresh)
+
+            refreshTokens.insert(
+                RefreshToken(
+                    jti = jti,
+                    familyId = familyId,
+                    userId = user.id.toHexString(),
+                    tokenHash = rtHash,
+                    expiresAt = Instant.now().toEpochMilli() + jwtConfig.refreshExpiresMs
+                )
+            )
+
+            logger().info("5")
+            val access = tokenService.generateAccessToken(user)
+            val tokenPair = TokenPair(access, refresh)
+
+            // Direct Login
+            val response = OtpVerificationResponse(
+                otpVerified = true,
+                userExists = true,
+                existingPhone = user.phone,
+                tokenPair = tokenPair
+            )
+            logger().info("6")
+            return AuthResult.Success(response)
+        }
 
     }
-
 
     // SIGNUP USER
     override suspend fun signUpUser(request: SignUpRequest): AuthResult<TokenPair> {
@@ -138,14 +120,36 @@ class AuthRepositoryImpl(
         val username = request.username.trim()
         val phone = request.phone.trim()
         val email = request.email.trim()
-        val password = request.password.trim()
-        val otp = request.otp!!.trim()
+//        val password = request.password.trim()
+        val dob = request.dob.trim()
+        val gender = request.gender
 
-
-        // verify OTP
-        if (!otpRepository.verifyOtp(phone, otp)) {
-            return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid or expired OTP")
+        // username validation
+        if (!username.matches(usernameRegex)) {
+            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid username format")
         }
+        if (!phone.matches(phoneRegex)) {
+            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid phone number")
+        }
+        if (email.isNotBlank() && !email.matches(emailRegex)) {
+            return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid email format")
+        }
+
+
+        // uniqueness checks
+        if (userRepository.isUsernameTaken(username)) {
+            return AuthResult.Error(HttpStatusCode.Conflict, "Username already taken")
+        }
+        /*TODO: NO NEED*/
+        if (userRepository.isPhoneTaken(phone)) {
+            return AuthResult.Error(HttpStatusCode.Conflict, "Phone already registered")
+        }
+        if (email.isNotBlank() && userRepository.isEmailTaken(email)) {
+            return AuthResult.Error(HttpStatusCode.Conflict, "Email already registered")
+        }
+
+
+
 
         val user = userRepository.createUser(
             User(
@@ -154,7 +158,9 @@ class AuthRepositoryImpl(
                 username = username,
                 email = email,
                 phone = phone,
-                passwordHash = hasher.hash(password)
+//                passwordHash = hasher.hash(password),
+                dob = dob,
+                gender = gender
             )
         ) ?: return AuthResult.Error(HttpStatusCode.InternalServerError, "Failed to create user")
 
@@ -181,21 +187,24 @@ class AuthRepositoryImpl(
     }
 
 
-
-
+    /*TODO: STATE TOKEN FOR LOGIN*/
     // LOGIN USER
     override suspend fun loginUser(request: LoginRequest): AuthResult<TokenPair> {
-        val identifier = request.identifier.trim()
-        val user = when {
-            identifier.matches(emailRegex) -> userRepository.getUserByEmail(identifier)
-            identifier.matches(phoneRegex) -> userRepository.getUserByPhone(identifier)
-            identifier.matches(usernameRegex) -> userRepository.getUserByUsername(identifier)
-            else -> return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid identifier format")
-        } ?: return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid credentials")
+        val phone = request.phone.trim()
 
-        if (!hasher.verify(request.password, user.passwordHash)) {
-            return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid credentials")
-        }
+        val user = userRepository.getUserByPhone(phone)
+            ?: return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid identifier format")
+
+//        val user = when {
+//            identifier.matches(emailRegex) -> userRepository.getUserByEmail(identifier)
+//            identifier.matches(phoneRegex) -> userRepository.getUserByPhone(identifier)
+//            identifier.matches(usernameRegex) -> userRepository.getUserByUsername(identifier)
+//            else -> return AuthResult.Error(HttpStatusCode.BadRequest, "Invalid identifier format")
+//        } ?: return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid credentials")
+
+//        if (!hasher.verify(request.password, user.passwordHash)) {
+//            return AuthResult.Error(HttpStatusCode.Unauthorized, "Invalid credentials")
+//        }
 
         val familyId = UUID.randomUUID().toString()
         val jti = UUID.randomUUID().toString()

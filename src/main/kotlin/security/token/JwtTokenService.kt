@@ -12,7 +12,7 @@ class JwtTokenService(
     override fun generateAccessToken(user: User): String {
         val algorithm = Algorithm.HMAC256(config.accessSecret)
         return JWT.create()
-            .withKeyId(config.accessSecret)
+            .withKeyId(config.accessKid)
             .withAudience(config.audience)
             .withIssuer(config.issuer)
             .withClaim("userId", user.id.toHexString())
@@ -24,7 +24,7 @@ class JwtTokenService(
     override fun generateRefreshToken(userId: String, jti: String, familyId: String): String {
         val algorithm = Algorithm.HMAC256(config.refreshSecret)
         return JWT.create()
-            .withKeyId(config.refreshSecret)
+            .withKeyId(config.refreshKid)
             .withAudience(config.audience)
             .withIssuer(config.issuer)
             .withJWTId(jti)

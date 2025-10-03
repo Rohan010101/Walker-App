@@ -1,26 +1,32 @@
 package com.example.routing
 
-import com.example.data.model.LoginRequest
-import com.example.data.model.LogoutRequest
-import com.example.data.model.RefreshRequest
-import com.example.data.model.SignUpRequest
+import com.example.data.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.utils.AuthResult
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.routing.Route
 
 fun Route.authRoutes(
     authRepository: AuthRepository,
 ) {
     route("/auth") {
 
-
-        // REQUEST OTP before signup
+        // REQUEST OTP
         post("/request-otp") {
-            val request = call.receive<SignUpRequest>()
-            when (val result = authRepository.requestTestOtp(request)) {
+            val request = call.receive<OtpRequest>()
+            when (val result = authRepository.requestOtp(request)) {
+                is AuthResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                is AuthResult.Error -> call.respond(result.status, mapOf("error" to result.message))
+            }
+        }
+
+        // VERIFY OTP
+        post("/verify-otp") {
+            val request = call.receive<OtpVerificationRequest>()
+            when (val result = authRepository.verifyOtp(request)) {
                 is AuthResult.Success -> call.respond(HttpStatusCode.OK, result.data)
                 is AuthResult.Error -> call.respond(result.status, mapOf("error" to result.message))
             }
@@ -65,6 +71,5 @@ fun Route.authRoutes(
             }
         }
     }
-
 }
 

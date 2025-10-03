@@ -12,15 +12,17 @@ import kotlin.time.Duration.Companion.hours
 
 class S3Service (
     private val bucketName: String = System.getenv("S3_BUCKET"),
+    private val s3: S3Client,
+    private val client: HttpClient
 ) {
-    private val client = HttpClient(CIO)
+//    private val client = HttpClient(CIO)
 
 
 
 
     // USE OBJECT KEY DIRECTLY TO FETCH PRESIGNED URL
     suspend fun getPresignedUrlFromKey(key: String, version: Long? = null): String? {
-        val s3 = S3Client.fromEnvironment {  }
+//        val s3 = S3Client.fromEnvironment {  }
 
         return try {
             val request = GetObjectRequest {
@@ -59,7 +61,7 @@ class S3Service (
         imageBytes: ByteArray
     ) {
         val key = "profilePicture/$userId/$userId.jpg"
-        val s3 = S3Client.fromEnvironment {  }
+//        val s3 = S3Client.fromEnvironment {  }
 
         val unsignedPutObjectRequest = PutObjectRequest{
             bucket = bucketName
@@ -88,7 +90,7 @@ class S3Service (
     // TODO: TO BE DELETED => NO DIRECT FETCH FROM S3, ONLY VIA DB-PFP-KEY
     suspend fun getProfilePicUrl(userId: String): String? {
         val key = "profilePicture/$userId/$userId.jpg"
-        val s3 = S3Client.fromEnvironment {  }
+//        val s3 = S3Client.fromEnvironment {  }
 
         return try {
 
@@ -120,7 +122,7 @@ class S3Service (
 
     suspend fun deleteProfilePic(userId: String) {
         val key = "profilePicture/$userId/$userId.jpg"
-        val s3 = S3Client.fromEnvironment {  }
+//        val s3 = S3Client.fromEnvironment {  }
 
         try {
             s3.deleteObject(DeleteObjectRequest {

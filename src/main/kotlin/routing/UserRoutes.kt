@@ -1,22 +1,26 @@
 package com.example.routing
 
+import aws.sdk.kotlin.services.s3.S3Client
 import com.example.data.model.ProfilePicResponse
 import com.example.data.model.UpdateUserDto
 import com.example.domain.model.User
 import com.example.domain.repository.UserRepository
 import com.example.s3.S3Service
 import com.example.utils.toUserResponse
+import com.example.utils.userIdOrRespond
+import io.ktor.client.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
 
 fun Route.userRoutes(
+    s3: S3Client,
+    client: HttpClient,
     userRepository: UserRepository
 ) {
     route("/users") {
@@ -25,22 +29,22 @@ fun Route.userRoutes(
         // PUBLIC ENDPOINTS
         // ---------------------------
 
-        // CREATE USER
-        post("") {
-            call.application.log.info("POST /users called")
-            val user = try {
-                call.receive<User>()
-            } catch (e: Exception) {
-                call.application.log.error("Invalid request body: ${e.message}", e)
-                return@post call.respond(HttpStatusCode.BadRequest, "Invalid user payload")
-            }
-
-            val created = userRepository.createUser(user)
-                ?: return@post call.respond(HttpStatusCode.InternalServerError, "Failed to create user")
-
-            call.application.log.info("User created with id: ${created.id}")
-            call.respond(HttpStatusCode.Created, created.toUserResponse())
-        }
+//        // CREATE USER
+//        post("") {
+//            call.application.log.info("POST /users called")
+//            val user = try {
+//                call.receive<User>()
+//            } catch (e: Exception) {
+//                call.application.log.error("Invalid request body: ${e.message}", e)
+//                return@post call.respond(HttpStatusCode.BadRequest, "Invalid user payload")
+//            }
+//
+//            val created = userRepository.createUser(user)
+//                ?: return@post call.respond(HttpStatusCode.InternalServerError, "Failed to create user")
+//
+//            call.application.log.info("User created with id: ${created.id}")
+//            call.respond(HttpStatusCode.Created, created.toUserResponse())
+//        }
 
         // GET ALL USERS
         get("") {
@@ -138,18 +142,7 @@ fun Route.userRoutes(
 
                 // GET CURRENT USER (self)
                 get {
-                    val principal = call.principal<JWTPrincipal>()
-                        ?: return@get call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Invalid or missing token")
-                        )
-
-                    val userId = principal.payload.getClaim("userId")?.asString()
-                        ?: return@get call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Missing userId in token")
-                        )
-
+                    val userId = call.userIdOrRespond() ?: return@get
                     val user = userRepository.getUserByUserId(userId)?.toUserResponse()
                         ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found"))
 
@@ -163,22 +156,8 @@ fun Route.userRoutes(
                     val userDto = call.receive<UpdateUserDto>()
                     call.application.log.info("userDto executed: $userDto")
 
-                    val principal = call.principal<JWTPrincipal>()
-                        ?: return@put call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Invalid or missing token")
-                        )
-                    call.application.log.info("principal executed: $principal")
-
-
-                    val userId = principal.payload.getClaim("userId")?.asString()
-                        ?: return@put call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Missing userId in token")
-                        )
+                    val userId = call.userIdOrRespond() ?: return@put
                     call.application.log.info("userId executed: $userId")
-
-
 
                     val success = userRepository.updateUserProfile(userId, userDto)
                     call.application.log.info("success executed: $success")
@@ -193,16 +172,8 @@ fun Route.userRoutes(
 
                     // Upload/Update PFP
                     post {
-                        val principal = call.principal<JWTPrincipal>()
-                            ?: return@post call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Invalid or missing token")
-                            )
-                        val userId = principal.payload.getClaim("userId").asString()
-                            ?: return@post call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Missing userId in token")
-                            )
+                        val userId = call.userIdOrRespond() ?: return@post
+
 
                         val multipart = call.receiveMultipart()
                         var fileBytes: ByteArray? = null
@@ -220,7 +191,7 @@ fun Route.userRoutes(
                                 .also { call.application.log.info("Responded 400: No file uploaded for $userId") }
                         }
 
-                        val s3Service = S3Service()
+                        val s3Service = S3Service(s3 = s3, client =  client)
                         val key = "profilePicture/$userId/$userId.jpg"
 
                         try {
@@ -259,16 +230,7 @@ fun Route.userRoutes(
 
                     // Fetch PFP presigned URL
                     get {
-                        val principal = call.principal<JWTPrincipal>()
-                            ?: return@get call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Invalid or missing token")
-                            )
-                        val userId = principal.payload.getClaim("userId").asString()
-                            ?: return@get call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Missing userId in token")
-                            )
+                        val userId = call.userIdOrRespond() ?: return@get
 
                         val user = userRepository.getUserByUserId(userId)
                         if (user == null) {
@@ -277,7 +239,7 @@ fun Route.userRoutes(
                                 .also { call.application.log.info("Responded 404: User not found $userId in get") }
                         }
 
-                        val url = user.profilePicKey?.let { S3Service().getPresignedUrlFromKey(it) }
+                        val url = user.profilePicKey?.let { S3Service(s3 = s3, client =  client).getPresignedUrlFromKey(it) }
 
                         call.application.log.info("Fetched presigned URL for user $userId: ${url != null}")
 
@@ -292,16 +254,7 @@ fun Route.userRoutes(
 
                     // Delete PFP
                     delete {
-                        val principal = call.principal<JWTPrincipal>()
-                            ?: return@delete call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Invalid or missing token")
-                            )
-                        val userId = principal.payload.getClaim("userId").asString()
-                            ?: return@delete call.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "Missing userId in token")
-                            )
+                        val userId = call.userIdOrRespond() ?: return@delete
 
                         val user = userRepository.getUserByUserId(userId)
                         if (user == null) {
@@ -317,7 +270,7 @@ fun Route.userRoutes(
                                 .also { call.application.log.info("Responded 400: No PFP to delete for $userId") }
                         }
 
-                        val s3Service = S3Service()
+                        val s3Service = S3Service(s3 = s3, client =  client)
 
                         try {
                             // 1️⃣ Delete DB key first
@@ -347,6 +300,17 @@ fun Route.userRoutes(
                         }
                     }
                 }
+
+
+
+                // In Profile Route
+//                route("walker") {
+//
+//                }
+//
+//                route("wanderer") {
+//
+//                }
             }
 
         }

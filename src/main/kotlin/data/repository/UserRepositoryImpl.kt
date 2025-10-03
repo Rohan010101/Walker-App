@@ -44,8 +44,17 @@ class UserRepositoryImpl(
     }
 
     override suspend fun getUserByPhone(phone: String): User? {
-        val user = users.findOne(User::phone eq phone)
-        return user
+        logger().info("check1")
+        logger().info(phone)
+        return try {
+            val user = users.findOne(User::phone eq phone)
+            logger().info("check2, user=$user")
+            user
+        } catch (e: Exception) {
+            logger().error("Error fetching user by phone=$phone", e)
+            null
+        }
+
     }
 
     override suspend fun getUserByUserId(userId: String): User? {

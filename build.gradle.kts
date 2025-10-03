@@ -69,6 +69,10 @@ dependencies {
     implementation("io.projectreactor:reactor-core:3.6.4") // latest stable as of 2025
 
 
+    // Twilio SDK
+    implementation("com.twilio.sdk:twilio:9.16.0")
+
+
     // Logging
 
     // Ktor client
